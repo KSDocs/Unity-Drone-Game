@@ -6,14 +6,15 @@ public class DroneShoot : MonoBehaviour
     public float range = 50f;
     public LineRenderer laser;
     public Transform firePoint;
+    public LayerMask hitMask = ~0;
 
     [Header("Cooldown")]
     public float shockCooldown = 2f;
-    private float cooldownTimer = 0f;
+    private float cooldownTimer;
 
     [Header("Laser Burst")]
     public float laserDuration = 0.1f;
-    private float laserTimer = 0f;
+    private float laserTimer;
 
     [Header("UI")]
     public ShockCooldownUI cooldownUI;
@@ -32,6 +33,26 @@ public class DroneShoot : MonoBehaviour
             FireLaser();
             cooldownTimer = shockCooldown;
             laserTimer = laserDuration;
+
+            if (cooldownUI != null)
+                cooldownUI.OnCooldownStarted();
+        }
+    }
+
+    void HandleCooldown()
+    {
+        if (cooldownTimer > 0f)
+        {
+            cooldownTimer -= Time.deltaTime;
+            if (cooldownTimer < 0f)
+                cooldownTimer = 0f;
+        }
+
+        if (cooldownUI != null)
+        {
+            float progress = 1f - (cooldownTimer / shockCooldown);
+            progress = Mathf.Clamp01(progress);
+            cooldownUI.SetCooldownProgress(progress);
         }
     }
 
@@ -41,54 +62,34 @@ public class DroneShoot : MonoBehaviour
         {
             laserTimer -= Time.deltaTime;
         }
-        else
+
+        if (laser != null)
         {
-            laser.enabled = false;
+            laser.enabled = laserTimer > 0f;
         }
     }
-    void HandleCooldown()
-    {
-        if (cooldownTimer > 0f)
-        {
-            cooldownTimer -= Time.deltaTime;
-            if (cooldownTimer < 0f) cooldownTimer = 0f;
-        }
-
-        // Update UI every frame
-        if (cooldownUI != null)
-        {
-            float progress = cooldownTimer / shockCooldown; // 1 = full, 0 = ready
-            cooldownUI.SetCooldownProgress(progress);
-        }
-    }
-
 
     void FireLaser()
     {
-        Debug.Log("shoot");
+        Ray ray = new Ray(firePoint.position, firePoint.forward);
+        Vector3 endPoint = firePoint.position + firePoint.forward * range;
 
-        RaycastHit hit;
-        Vector3 endPoint;
-
-        if (Physics.Raycast(firePoint.position, firePoint.forward, out hit, range))
+        if (Physics.Raycast(ray, out RaycastHit hit, range, hitMask))
         {
             endPoint = hit.point;
 
-            IShockInteractable reactable =
-                hit.collider.GetComponentInParent<IShockInteractable>();
-
+            IShockInteractable reactable = hit.collider.GetComponentInParent<IShockInteractable>();
             if (reactable != null)
             {
                 reactable.OnShockHit();
             }
         }
-        else
-        {
-            endPoint = firePoint.position + firePoint.forward * range;
-        }
 
-        laser.enabled = true;
-        laser.SetPosition(0, firePoint.position);
-        laser.SetPosition(1, endPoint);
+        if (laser != null)
+        {
+            laser.enabled = true;
+            laser.SetPosition(0, firePoint.position);
+            laser.SetPosition(1, endPoint);
+        }
     }
 }

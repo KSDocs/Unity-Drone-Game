@@ -1,5 +1,4 @@
-using UnityEngine;
-using UnityEngine.InputSystem;
+﻿using UnityEngine;
 public class DroneController : MonoBehaviour
 {
     [Header("Movement")]
@@ -19,13 +18,16 @@ public class DroneController : MonoBehaviour
     public float mouseSensitivity = 2f;
     public float maxPitch = 80f;
 
+    public Transform cameraPivot;
+
     private float pitch;
     private Vector3 currentVelocity;
     private float currentVertical;
     private float tiltX;
     private float tiltZ;
 
-    public Transform cameraPivot;
+    [Header("AI Control")]
+    public bool canMove = true;
 
     void Start()
     {
@@ -40,8 +42,20 @@ public class DroneController : MonoBehaviour
         HandleTilt();
     }
 
+    public void StopMotion()
+    {
+        currentVelocity = Vector3.zero;
+        currentVertical = 0f;
+    }
+
     void HandleMovement()
     {
+        if (!canMove)
+        {
+            StopMotion();
+            return;
+        }
+
         float h = Input.GetAxis("Horizontal");
         float v = Input.GetAxis("Vertical");
 
@@ -55,10 +69,8 @@ public class DroneController : MonoBehaviour
         );
 
         Vector3 horizontalMove = currentVelocity * Time.deltaTime;
-
         TryMove(horizontalMove);
 
-        // Vertical
         float verticalInput = 0f;
         if (Input.GetKey(KeyCode.LeftShift)) verticalInput = 1f;
         if (Input.GetKey(KeyCode.LeftControl)) verticalInput = -1f;
@@ -70,10 +82,8 @@ public class DroneController : MonoBehaviour
         );
 
         Vector3 verticalMove = Vector3.up * currentVertical * Time.deltaTime;
-
         TryMove(verticalMove);
 
-        // Tilt targets
         tiltZ = -h * tiltAmount;
         tiltX = v * tiltAmount;
     }
@@ -82,22 +92,36 @@ public class DroneController : MonoBehaviour
     {
         if (move == Vector3.zero) return;
 
-        RaycastHit hit;
+        int maxIterations = 3;
+        Vector3 remainingMove = move;
 
-        if (Physics.SphereCast(
-            transform.position,
-            collisionRadius,
-            move.normalized,
-            out hit,
-            move.magnitude,
-            collisionMask))
+        for (int i = 0; i < maxIterations; i++)
         {
-            Vector3 slideDirection = Vector3.ProjectOnPlane(move, hit.normal);
-            transform.position += slideDirection;
-        }
-        else
-        {
-            transform.position += move;
+            RaycastHit hit;
+
+            if (Physics.SphereCast(
+                transform.position,
+                collisionRadius,
+                remainingMove.normalized,
+                out hit,
+                remainingMove.magnitude,
+                collisionMask))
+            {
+                float distance = hit.distance - 0.01f;
+
+                if (distance > 0)
+                    transform.position += remainingMove.normalized * distance;
+
+                remainingMove = Vector3.ProjectOnPlane(remainingMove, hit.normal);
+
+                if (remainingMove.magnitude < 0.001f)
+                    break;
+            }
+            else
+            {
+                transform.position += remainingMove;
+                break;
+            }
         }
     }
 
